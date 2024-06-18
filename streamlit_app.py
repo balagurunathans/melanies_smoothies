@@ -1,34 +1,35 @@
 # Import python packages
 import streamlit as st
 
-from snowflake.snowpark.functions import col, when_matched
+from snowflake.snowpark.functions import col
 
 # Write directly to the app
-st.title(":cup_with_straw: Pending Orders! :cup_with_straw:")
+st.title(":cup_with_straw: Customize your Smoothie! :cup_with_straw:")
 st.write(
-    """Orders that needs to be filled
+    """Choose your own fruits you want in your custom smoothie!
     """
 )
-#name_on_order = st.text_input('Name on the order:')
-#st.write ("The name on your smoothie would be:", name_on_order)
+name_on_order = st.text_input('Name on the order:')
+st.write ("The name on your smoothie would be:", name_on_order)
 
 cnx=st.connection("snowflake")
 session=cnx.session()
-my_dataframe = session.table("smoothies.public.orders").filter(col("ORDER_FILLED")==0).collect()
+my_dataframe = session.table("smoothies.public.fruit_options").select (col('fruit_name'))
 #st.dataframe(data=my_dataframe, use_container_width=True)
-if my_dataframe:
-    editable_df = st.data_editor(my_dataframe)
-    time_to_insert =  st.button('Submit')
+ingredients_list = st.multiselect ('Choose upto 5 ingredients:', my_dataframe,max_selections=5)
+if ingredients_list:
+    #st.write(ingredients_list)
+    #st.text(ingredients_list)
+    ingredient_string = ' '
+    for fruit_chosen in ingredients_list:
+        ingredient_string += fruit_chosen + ' '
+    #st.write(ingredient_string)
+    my_insert_stmt = """ insert into smoothies.public.orders(ingredients,name_on_order)
+            values ('""" + ingredient_string + """','""" + name_on_order + """')"""
+    #st.write(my_insert_stmt)
+    #st.stop()
+    time_to_insert =  st.button('Submit order')
     if time_to_insert:
-        og_dataset = session.table("smoothies.public.orders")
-        edited_dataset = session.create_dataframe(editable_df)
-        try:
-            og_dataset.merge(edited_dataset
-                     , (og_dataset['order_uid'] == edited_dataset['order_uid'])
-                     , [when_matched().update({'ORDER_FILLED': edited_dataset['ORDER_FILLED']})]
-                    )
-            st.success('Your Smoothie is ordered!', icon="✅")
-        except:
-            st.write('Something went wrong!')
-else:
-    st.success('No Pending Orders!', icon="✅")
+        session.sql(my_insert_stmt).collect()
+        st.success('Your Smoothie is ordered!', icon="✅")
+
